@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0b0d12" />
+<title>VidGrab · 影片下載器</title>
+<meta name="description" content="貼上連結，下載 YouTube、Instagram、Facebook 影片。" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%237c5cff'/%3E%3Cpath d='M24 20v24l20-12z' fill='white'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="aurora" aria-hidden="true">
+  <span class="orb orb-1"></span>
+  <span class="orb orb-2"></span>
+  <span class="orb orb-3"></span>
+</div>
+
+<main class="shell">
+  <header class="top">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M8 6.5v11l9-5.5-9-5.5Z" fill="currentColor"/></svg>
+      </div>
+      <div class="brand-text">
+        <h1>VidGrab</h1>
+        <p>貼上連結，即刻下載影片</p>
+      </div>
+    </div>
+    <button class="icon-btn" id="settingsBtn" aria-label="設定" title="設定後端連線">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.05A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.05A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6h.09A1.7 1.7 0 0 0 10.1 3V3a2 2 0 1 1 4 0v.05A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v.09A1.7 1.7 0 0 0 21 10.1h.05a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 1Z"/>
+      </svg>
+    </button>
+  </header>
+
+  <section class="card input-card">
+    <div class="chips" id="chips">
+      <span class="chip" data-plat="youtube"><i class="dot yt"></i>YouTube</span>
+      <span class="chip" data-plat="instagram"><i class="dot ig"></i>Instagram</span>
+      <span class="chip" data-plat="facebook"><i class="dot fb"></i>Facebook</span>
+    </div>
+
+    <div class="field">
+      <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <path d="M10 13a5 5 0 0 0 7.07 0l2.12-2.12a5 5 0 1 0-7.07-7.07L11 4.93"/>
+        <path d="M14 11a5 5 0 0 0-7.07 0L4.8 13.12a5 5 0 1 0 7.07 7.07L13 19.07"/>
+      </svg>
+      <input id="urlInput" type="url" inputmode="url" autocomplete="off" spellcheck="false"
+             placeholder="貼上 YouTube / Instagram / Facebook 影片連結" />
+      <button class="ghost-btn" id="pasteBtn" type="button">貼上</button>
+    </div>
+
+    <button class="primary-btn" id="fetchBtn" type="button">
+      <span class="btn-label">取得影片</span>
+      <span class="spinner" aria-hidden="true"></span>
+    </button>
+
+    <p class="hint" id="hint">支援 YouTube、Instagram Reels／貼文、Facebook 影片與 Reels。</p>
+
+    <div class="banner" id="setupBanner" hidden>
+      <strong>尚未連接後端</strong>
+      <span>GitHub Pages 只能放前端。請先部署後端，然後在右上角設定填入 API 網址。</span>
+      <button class="link-btn" id="bannerSettings">立即設定</button>
+    </div>
+  </section>
+
+  <section class="card result-card" id="resultCard" hidden>
+    <div class="thumb-wrap">
+      <img id="thumb" alt="" loading="lazy" />
+      <span class="dur" id="dur"></span>
+    </div>
+    <div class="meta">
+      <h2 id="title"></h2>
+      <p class="uploader" id="uploader"></p>
+    </div>
+
+    <div class="opt-group">
+      <label class="opt-label">畫質</label>
+      <div class="pills" id="qualityPills"></div>
+    </div>
+
+    <button class="primary-btn download" id="downloadBtn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/>
+      </svg>
+      <span class="btn-label">下載</span>
+      <span class="spinner" aria-hidden="true"></span>
+    </button>
+  </section>
+
+  <section class="card progress-card" id="progressCard" hidden>
+    <div class="prog-head">
+      <span id="progStatus">準備中…</span>
+      <span id="progPct">0%</span>
+    </div>
+    <div class="bar"><span id="barFill"></span></div>
+    <div class="prog-foot" id="progFoot"></div>
+  </section>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <footer class="foot">
+    <p>請只下載你擁有或有權使用的內容，並遵守各平台的服務條款。</p>
+  </footer>
+</main>
+
+<dialog id="settingsDialog">
+  <form method="dialog" class="dialog-body">
+    <h3>後端連線設定</h3>
+    <p class="dialog-sub">填入你部署的後端網址。留空則使用目前網域。</p>
+    <input id="apiInput" type="url" placeholder="https://your-app.onrender.com" autocomplete="off" spellcheck="false" />
+    <div class="dialog-actions">
+      <button value="cancel" class="ghost-btn wide">取消</button>
+      <button value="save" class="primary-btn wide" id="saveSettings">儲存</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>

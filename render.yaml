@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: vidgrab
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: singapore
+    envVars:
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: MAX_CONCURRENT
+        value: "3"
