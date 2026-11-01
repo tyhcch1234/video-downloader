@@ -208,6 +208,10 @@ def cleanup_old_jobs():
             shutil.rmtree(job.get("dir", ""), ignore_errors=True)
 
 
+def valid_url(u):
+    return bool(re.match(r"^https?://[^\s/$.?#][^\s]*$", u or ""))
+
+
 def safe_name(name, fallback="video"):
     name = re.sub(r"[\\/:*?\"<>|\r\n\t]+", "_", name or "").strip(" ._")
     return (name[:120] or fallback)
@@ -232,6 +236,8 @@ def api_info():
     url = (data.get("url") or "").strip()
     if not url:
         return jsonify({"ok": False, "error": "請貼上影片網址"}), 400
+    if not valid_url(url):
+        return jsonify({"ok": False, "error": "網址格式不正確，需以 http:// 或 https:// 開頭"}), 400
 
     opts = base_opts()
     opts.update({"skip_download": True})
@@ -294,6 +300,8 @@ def api_download():
     audio_only = bool(data.get("audio_only")) or "音檔" in str(data.get("label", ""))
     if not url:
         return jsonify({"ok": False, "error": "缺少網址"}), 400
+    if not valid_url(url):
+        return jsonify({"ok": False, "error": "網址格式不正確"}), 400
 
     job_id = uuid.uuid4().hex[:12]
     job_dir = os.path.join(WORK_ROOT, job_id)
