@@ -29,6 +29,26 @@ jobs:
           sudo apt-get install -y -qq ffmpeg
           python3 -m pip install --quiet -U yt-dlp
 
+      # 選用：repo Settings → Secrets → Actions 加一個 COOKIES
+      # 內容可以是 Netscape cookies.txt 原文，或它的 base64。沒設定就跳過。
+      - name: Prepare cookies (optional)
+        env:
+          COOKIES: ${{ secrets.COOKIES }}
+        run: |
+          set -e
+          if [ -z "${COOKIES:-}" ]; then
+            echo "no COOKIES secret, continuing without cookies"
+            exit 0
+          fi
+          printf '%s' "$COOKIES" > /tmp/ck.raw
+          if [ "$(head -c 1 /tmp/ck.raw)" = "#" ]; then
+            cp /tmp/ck.raw cookies.txt
+          else
+            base64 -d /tmp/ck.raw > cookies.txt 2>/dev/null || cp /tmp/ck.raw cookies.txt
+          fi
+          echo "COOKIES_FILE=$PWD/cookies.txt" >> "$GITHUB_ENV"
+          echo "cookies lines: $(wc -l < cookies.txt)"
+
       - name: Download
         env:
           URL: ${{ inputs.url }}
@@ -38,20 +58,26 @@ jobs:
           set -e
           mkdir -p out
           python3 - <<'PY'
-          import os, yt_dlp
-          url = os.environ["URL"]
+          import os, sys, yt_dlp
+
+          url = (os.environ.get("URL") or "").strip()
           sel = os.environ.get("SELECTOR") or "bv*+ba/b"
-          audio = os.environ.get("AUDIO", "false").lower() == "true"
+          audio = (os.environ.get("AUDIO", "false") or "").lower() == "true"
+          ck = os.environ.get("COOKIES_FILE")
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+
           opts = {
               "format": sel if not audio else "bestaudio/best",
               "outtmpl": "out/%(title).80s.%(ext)s",
               "noplaylist": True,
               "quiet": True,
-              "no_warnings": True,
+              "no_warnings": False,
               "retries": 5,
               "fragment_retries": 5,
               "concurrent_fragment_downloads": 4,
           }
+          if ck and os.path.exists(ck):
+              opts["cookiefile"] = ck
           if audio:
               opts["postprocessors"] = [{
                   "key": "FFmpegExtractAudio",
@@ -60,8 +86,35 @@ jobs:
               }]
           else:
               opts["merge_output_format"] = "mp4"
-          with yt_dlp.YoutubeDL(opts) as ydl:
-              ydl.download([url])
+
+          def report(title, body):
+              if not summary:
+                  return
+              with open(summary, "a", encoding="utf-8") as f:
+                  f.write(f"## {title}\n\n```\n{body}\n```\n\n"
+                          f"URL：`{url}`\n格式：`{opts['format']}`　音檔：`{audio}`　"
+                          f"cookies：`{'有' if opts.get('cookiefile') else '沒有'}`\n")
+
+          try:
+              with yt_dlp.YoutubeDL(opts) as ydl:
+                  ydl.download([url])
+          except Exception as e:
+              msg = str(e).strip() or e.__class__.__name__
+              msg = "\n".join(msg.splitlines()[:25])[:3000]
+              report("❌ 下載失敗（yt-dlp 原始錯誤）", msg)
+              # 同時變成 run 頁面的紅色 annotation，手機上也看得到
+              one_line = " ".join(msg.split())[:900]
+              for a, b in (("%", "%25"), ("\r", "%0D"), ("\n", "%0A")):
+                  one_line = one_line.replace(a, b)
+              print(f"::error title=yt-dlp 失敗::{one_line}")
+              sys.exit(1)
+
+          files = [f for f in os.listdir("out")] if os.path.isdir("out") else []
+          if not files:
+              report("❌ 下載完成但沒有檔案", "out/ 是空的，通常是格式選擇器沒有可用格式。")
+              print("::error title=沒有輸出檔案::out/ 是空的，檢查 selector")
+              sys.exit(1)
+          print("produced:", files)
           PY
           ls -lh out/
 
@@ -75,6 +128,11 @@ jobs:
           set -e
           FILE=$(ls -S out/* | head -1)
           NAME=$(basename "$FILE")
+          SIZE=$(du -m "$FILE" | cut -f1)
+          if [ "$SIZE" -gt 1900 ]; then
+            echo "::error title=檔案過大::${NAME} 是 ${SIZE}MB，Release 資產上限 2GB，請改用較低畫質選擇器"
+            exit 1
+          fi
           TAG="dl-${RUN}-$(date +%Y%m%d-%H%M%S)"
           gh release create "$TAG" "$FILE" -R "$REPO" \
             --title "下載 ${RUN}" \
