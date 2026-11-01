@@ -1,0 +1,73 @@
+name: download
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "影片網址"
+        required: true
+      selector:
+        description: "yt-dlp 格式選擇器"
+        required: false
+        default: "bv*+ba/b"
+      audio:
+        description: "true = 只取 MP3 音檔"
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python3 -m pip install --quiet -U yt-dlp
+
+      - name: Download
+        env:
+          URL: ${{ inputs.url }}
+          SELECTOR: ${{ inputs.selector }}
+          AUDIO: ${{ inputs.audio }}
+        run: |
+          set -e
+          python3 - <<'PY'
+          import os, yt_dlp
+          url = os.environ["URL"]
+          sel = os.environ.get("SELECTOR") or "bv*+ba/b"
+          audio = os.environ.get("AUDIO", "false").lower() == "true"
+          opts = {
+              "format": sel if not audio else "bestaudio/best",
+              "outtmpl": "out/%(title).80s.%(ext)s",
+              "noplaylist": True,
+              "quiet": True,
+              "no_warnings": True,
+              "retries": 5,
+              "fragment_retries": 5,
+              "concurrent_fragment_downloads": 4,
+          }
+          if audio:
+              opts["postprocessors"] = [{
+                  "key": "FFmpegExtractAudio",
+                  "preferredcodec": "mp3",
+                  "preferredquality": "320",
+              }]
+          else:
+              opts["merge_output_format"] = "mp4"
+          with yt_dlp.YoutubeDL(opts) as ydl:
+              ydl.download([url])
+          PY
+          ls -lh out/
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: video
+          path: out/*
+          retention-days: 1
+          if-no-files-found: error
