@@ -76,7 +76,7 @@ jobs:
           FILE=$(ls -S out/* | head -1)
           NAME=$(basename "$FILE")
           TAG="dl-${RUN}-$(date +%Y%m%d-%H%M%S)"
-          gh release create "$TAG" "$FILE" \
+          gh release create "$TAG" "$FILE" -R "$REPO" \
             --title "下載 ${RUN}" \
             --notes "由 GitHub Actions 自動產生，可隨時刪除。" \
             --latest=false
