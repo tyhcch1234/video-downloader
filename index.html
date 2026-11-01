@@ -54,6 +54,13 @@
   }
   .icon-btn:hover{color:var(--tx);background:rgba(255,255,255,.08)}
 
+  .seg{display:flex;gap:4px;padding:4px;border:1px solid var(--line);border-radius:13px;
+    background:rgba(255,255,255,.03);margin-bottom:12px}
+  .seg button{flex:1;border:0;background:none;color:var(--tx2);font-family:inherit;font-size:12.5px;
+    font-weight:600;padding:9px 6px;border-radius:10px;cursor:pointer;transition:.18s}
+  .seg button.on{background:rgba(255,77,103,.16);color:#ffb9c3;box-shadow:inset 0 0 0 1px rgba(255,77,103,.35)}
+  .seg button:hover:not(.on){color:var(--tx)}
+
   .card{
     background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015));
     border:1px solid var(--line);border-radius:var(--r);
@@ -158,6 +165,10 @@
   .sheet-in input{width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:12px;
     padding:12px 13px;color:var(--tx);font-size:14px;outline:none;font-family:inherit}
   .sheet-in input:focus{border-color:rgba(255,77,103,.55)}
+  .sheet-in label{display:block;font-size:11.5px;color:var(--tx3);margin:12px 0 5px;
+    letter-spacing:.04em;text-transform:uppercase}
+  .sheet-in h3{font-size:12.5px;margin:20px 0 2px;padding-top:14px;border-top:1px solid var(--line);
+    color:var(--tx2);font-weight:650}
   .row{display:flex;gap:9px;margin-top:14px}
   .row button{flex:1;padding:12px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.05);
     color:var(--tx);font-size:14px;font-family:inherit;cursor:pointer;font-weight:600}
@@ -190,6 +201,11 @@
       </svg>
     </button>
   </header>
+
+  <div class="seg" id="seg">
+    <button data-mode="server" class="on">伺服器模式</button>
+    <button data-mode="actions">GitHub Actions 模式</button>
+  </div>
 
   <div class="card">
     <div class="field">
@@ -248,6 +264,18 @@
       <button class="pri" id="saveBtn">儲存</button>
     </div>
     <div class="msg" id="sheetMsg"></div>
+
+    <h3>GitHub Actions 模式（免伺服器）</h3>
+    <label for="ghRepo">Repo（owner/name）</label>
+    <input id="ghRepo" placeholder="tyhcch1234/video-downloader" autocapitalize="off" spellcheck="false">
+    <label for="ghToken">Fine-grained token（Actions: read &#38; write）</label>
+    <input id="ghToken" type="password" placeholder="github_pat_…" autocapitalize="off" spellcheck="false">
+    <p style="margin:8px 0 0;font-size:11.5px;color:var(--tx3)">
+      Token 只存在這部裝置的 localStorage，不會上傳到任何地方。每次下載會觸發一次 Actions，約 1–2 分鐘。
+    </p>
+    <div class="row">
+      <button class="pri" id="saveGhBtn">儲存 GitHub 設定</button>
+    </div>
   </div>
 </div>
 
@@ -258,15 +286,31 @@
   const store = {
     get api(){ return localStorage.getItem('vd_api') || ''; },
     set api(v){ v ? localStorage.setItem('vd_api', v) : localStorage.removeItem('vd_api'); },
+    get mode(){ return localStorage.getItem('vd_mode') || 'server'; },
+    set mode(v){ localStorage.setItem('vd_mode', v); },
+    get repo(){ return localStorage.getItem('vd_repo') || 'tyhcch1234/video-downloader'; },
+    set repo(v){ localStorage.setItem('vd_repo', v); },
+    get token(){ return localStorage.getItem('vd_token') || ''; },
+    set token(v){ v ? localStorage.setItem('vd_token', v) : localStorage.removeItem('vd_token'); },
     get hist(){ try { return JSON.parse(localStorage.getItem('vd_hist') || '[]'); } catch(e){ return []; } },
     set hist(v){ localStorage.setItem('vd_hist', JSON.stringify(v.slice(0,8))); }
   };
 
   let API = (store.api || (isGH ? '' : location.origin)).replace(/\/+$/, '');
+  let MODE = store.mode;
   let current = null;      // info payload
   let currentUrl = '';
   let selected = null;
   let polling = null;
+
+  // quality presets used by GitHub Actions mode (no server to probe formats)
+  const STATIC_OPTS = [
+    { label:'最佳畫質（自動）', selector:'bv*+ba/b', kind:'video', note:'auto' },
+    { label:'1080p MP4', selector:'bv*[height<=1080]+ba/b[height<=1080]', kind:'video', note:'' },
+    { label:'720p MP4', selector:'bv*[height<=720]+ba/b[height<=720]', kind:'video', note:'' },
+    { label:'480p MP4', selector:'bv*[height<=480]+ba/b[height<=480]', kind:'video', note:'' },
+    { label:'MP3 音檔（320k）', selector:'bestaudio/best', kind:'audio', note:'audio' }
+  ];
 
   function setMsg(text, kind){
     const m = $('#msg');
@@ -281,16 +325,59 @@
   }
 
   function needServer(){
+    if(MODE === 'actions') return needToken();
     if(API) return false;
-    showBanner('<b>尚未設定伺服器。</b> GitHub Pages 只能寄存靜態網頁，影片下載需要一個 yt-dlp 後端。<br>按右上角齒輪填入伺服器網址，或看 <a href="./README.html">部署說明</a>。');
+    showBanner('<b>尚未設定伺服器。</b> GitHub Pages 只能寄存靜態網頁，影片下載需要一個 yt-dlp 後端。<br>按右上角齒輪填入伺服器網址，或切到「GitHub Actions 模式」使用免伺服器方案。');
+    openSheet();
+    return true;
+  }
+
+  function needToken(){
+    if(store.token && store.repo) return false;
+    showBanner('<b>GitHub Actions 模式需要一次性設定。</b> 在右上角齒輪填入 repo 與 fine-grained token（權限：Actions read &amp; write），之後每次下載都會觸發一次 Actions。');
     openSheet();
     return true;
   }
 
   function openSheet(){
     $('#apiInput').value = API || '';
+    $('#ghRepo').value = store.repo || '';
+    $('#ghToken').value = store.token || '';
     $('#sheet').classList.add('on');
   }
+
+  function applyMode(){
+    document.querySelectorAll('#seg button').forEach(b => {
+      b.classList.toggle('on', b.dataset.mode === MODE);
+    });
+    $('#dlBtn').textContent = MODE === 'actions' ? '用 GitHub 下載' : '下載';
+    if(MODE === 'actions'){
+      showBanner(store.token && store.repo ? '' :
+        '<b>GitHub Actions 模式。</b> 首次使用請在齒輪填入 repo 與 token；每次下載約 1–2 分鐘，完成後自動下載檔案（經瀏覽器解壓）。');
+    } else {
+      showBanner(API ? '' :
+        '<b>尚未設定伺服器。</b> GitHub Pages 只能寄存靜態網頁，影片下載需要一個 yt-dlp 後端。<br>按右上角齒輪填入伺服器網址，或切到「GitHub Actions 模式」使用免伺服器方案。');
+    }
+  }
+
+  document.querySelectorAll('#seg button').forEach(b => {
+    b.onclick = () => {
+      MODE = b.dataset.mode;
+      store.mode = MODE;
+      applyMode();
+      $('#result').style.display = 'none';
+      setMsg('');
+    };
+  });
+
+  $('#saveGhBtn').onclick = () => {
+    store.repo = $('#ghRepo').value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/+$/, '');
+    store.token = $('#ghToken').value.trim();
+    const box = $('#sheetMsg');
+    box.className = 'msg ok';
+    box.textContent = store.token && store.repo ? 'GitHub 設定已儲存（只存在這部裝置）' : '請填寫 repo 與 token';
+    if(store.token && store.repo){ applyMode(); setTimeout(() => { $('#sheet').classList.remove('on'); box.className='msg'; box.textContent=''; }, 900); }
+  };
   $('#settingsBtn').onclick = openSheet;
   $('#sheet').onclick = e => { if(e.target.id === 'sheet') $('#sheet').classList.remove('on'); };
 
@@ -334,6 +421,16 @@
   async function fetchInfo(){
     const url = $('#url').value.trim();
     if(!url){ setMsg('請先貼上連結', 'err'); return; }
+    if(MODE === 'actions'){
+      currentUrl = url;
+      current = {
+        title: hostOf(url) || url, uploader:'', duration:'', thumbnail:'',
+        extractor:'github', options: STATIC_OPTS
+      };
+      render(current);
+      setMsg('選好畫質後按「用 GitHub 下載」', 'ok');
+      return;
+    }
     if(needServer()) return;
     setMsg(''); $('#result').style.display = 'none'; $('#prog').style.display = 'none';
     const btn = $('#fetchBtn');
@@ -396,6 +493,7 @@
 
   async function download(){
     if(!current || !selected) return;
+    if(MODE === 'actions'){ runActions(); return; }
     if(needServer()) return;
     const btn = $('#dlBtn');
     btn.disabled = true; btn.textContent = '準備中…';
@@ -458,6 +556,150 @@
     }, 900);
   }
 
+  /* ---------------- GitHub Actions 模式 ---------------- */
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  function setStage(pct, text){
+    $('#prog').style.display = 'block';
+    $('#barFill').style.width = pct + '%';
+    $('#pct').textContent = text || (Math.round(pct) + '%');
+    $('#speed').textContent = '';
+  }
+
+  async function gh(path, opts){
+    opts = opts || {};
+    const headers = {
+      'Accept':'application/vnd.github+json',
+      'Authorization':'Bearer ' + store.token,
+      'X-GitHub-Api-Version':'2022-11-28'
+    };
+    if(opts.body) headers['Content-Type'] = 'application/json';
+    const r = await fetch('https://api.github.com' + path, {method: opts.method || 'GET', headers, body: opts.body});
+    if(!r.ok){
+      let m = 'HTTP ' + r.status;
+      try{ const j = await r.json(); if(j && j.message) m = j.message; }catch(e){}
+      if(r.status === 401) m = 'Token 無效或已過期，請重新產生並貼上';
+      if(r.status === 403) m = 'Token 權限不足：需要 Actions 的 read & write';
+      if(r.status === 404) m = '找不到 repo 或 workflow：請確認 repo 名稱與 Actions 已啟用';
+      throw new Error(m);
+    }
+    return r.status === 204 ? {} : r.json();
+  }
+
+  function loadJSZip(){
+    return new Promise((res, rej) => {
+      if(window.JSZip) return res(window.JSZip);
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+      s.onload = () => window.JSZip ? res(window.JSZip) : rej(new Error('jszip'));
+      s.onerror = () => rej(new Error('jszip-cdn'));
+      document.head.appendChild(s);
+    });
+  }
+
+  function triggerSave(blob, name){
+    const a = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    a.href = url;
+    a.download = name || 'download';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+
+  async function saveFromZip(zipBlob, fallback){
+    const prefer = /\.(mp4|mkv|webm|mov|mp3|m4a|opus)$/i;
+    try{
+      const JSZip = await loadJSZip();
+      const zip = await JSZip.loadAsync(zipBlob);
+      const files = Object.values(zip.files).filter(f => !f.dir);
+      if(!files.length) throw new Error('empty');
+      files.sort((a, b) => (prefer.test(b.name) ? 1 : 0) - (prefer.test(a.name) ? 1 : 0));
+      const f = files[0];
+      triggerSave(await f.async('blob'), f.name.split('/').pop() || fallback);
+      return f.name;
+    }catch(e){
+      triggerSave(zipBlob, (fallback || 'video') + '.zip');
+      setMsg('已下載 zip 檔（未能在瀏覽器解壓，請手動解壓）', 'ok');
+      return (fallback || 'video') + '.zip';
+    }
+  }
+
+  async function runActions(){
+    if(needToken()) return;
+    const btn = $('#dlBtn');
+    const [owner, repo] = store.repo.split('/');
+    btn.disabled = true; btn.textContent = '觸發中…';
+    setMsg('');
+    setStage(8, '觸發 GitHub Actions…');
+    const t0 = Date.now() - 5000;
+
+    try{
+      await gh(`/repos/${owner}/${repo}/actions/workflows/download.yml/dispatches`, {
+        method:'POST',
+        body: JSON.stringify({
+          ref:'main',
+          inputs:{
+            url: currentUrl,
+            selector: selected.selector,
+            audio: String(selected.kind === 'audio')
+          }
+        })
+      });
+
+      let run = null;
+      for(let i = 0; i < 20 && !run; i++){
+        await sleep(3000);
+        const j = await gh(`/repos/${owner}/${repo}/actions/runs?event=workflow_dispatch&per_page=6`);
+        run = (j.workflow_runs || []).find(r => new Date(r.created_at).getTime() >= t0);
+        if(!run) setStage(12, '等待排隊…');
+      }
+      if(!run) throw new Error('找不到對應的 workflow run（可能需要重試一次）');
+
+      setStage(20, '執行中…');
+      for(let i = 0; i < 240; i++){
+        await sleep(3000);
+        const r = await gh(`/repos/${owner}/${repo}/actions/runs/${run.id}`);
+        if(r.status === 'completed'){
+          if(r.conclusion !== 'success'){
+            throw new Error('Actions 執行失敗（' + r.conclusion + '）— 常見原因：該網站需要登入（IG / FB）、網址不支援、或影片過大。日誌：' + r.html_url);
+          }
+          break;
+        }
+        setStage(Math.min(80, 22 + i * 1.2), '執行中… 約 ' + Math.max(1, 60 - i * 3) + ' 秒');
+        if(i === 239) throw new Error('等待逾時，請到 Actions 頁面查看進度');
+      }
+
+      setStage(85, '取回檔案…');
+      const arts = await gh(`/repos/${owner}/${repo}/actions/runs/${run.id}/artifacts`);
+      const art = (arts.artifacts || [])[0];
+      if(!art) throw new Error('這個 run 沒有產出檔案');
+
+      const resp = await fetch(art.archive_download_url, {
+        headers:{'Authorization':'Bearer ' + store.token, 'Accept':'application/vnd.github+json'}
+      });
+      if(!resp.ok) throw new Error('取回檔案失敗 HTTP ' + resp.status);
+      const blob = await resp.blob();
+
+      setStage(95, '解壓…');
+      const name = await saveFromZip(blob, sanitize(current.title));
+      setStage(100, '完成');
+      if(!$('#msg').classList.contains('ok')) setMsg('已下載：' + name, 'ok');
+      addHist(current.title, name);
+    }catch(e){
+      setMsg(e.message || '失敗', 'err');
+      $('#prog').style.display = 'none';
+    }finally{
+      btn.disabled = false;
+      btn.textContent = '用 GitHub 下載';
+    }
+  }
+
+  function sanitize(s){
+    return String(s || 'video').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 80) || 'video';
+  }
+
   function addHist(title, file){
     const h = store.hist;
     h.unshift({t: title || '', f: file || '', at: Date.now()});
@@ -480,9 +722,7 @@
   $('#dlBtn').onclick = download;
   $('#url').addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); fetchInfo(); } });
 
-  if(!API && isGH){
-    showBanner('<b>尚未設定伺服器。</b> GitHub Pages 只能寄存靜態網頁，影片下載需要一個 yt-dlp 後端。<br>按右上角齒輪填入伺服器網址，或看 <a href="./README.html">部署說明</a>。');
-  }
+  applyMode();
   renderHist();
 })();
 </script>

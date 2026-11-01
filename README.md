@@ -92,6 +92,26 @@ Render 上可把 `cookies.txt` 放進 repo 的私有分支或使用 Secret File�
 
 ---
 
+## 模式二：GitHub Actions（完全免伺服器）
+
+不想部署後端的話，可以用 GitHub 自己的 runner 跑 yt-dlp：
+
+1. 網頁切到「GitHub Actions 模式」。
+2. 右上角齒輪填入 repo（`tyhcch1234/video-downloader`）與一組 **fine-grained PAT**，權限只需 **Actions: Read and write**（對這個 repo）。
+3. 貼連結 → 選畫質 → 「用 GitHub 下載」。
+
+流程：頁面用 API 觸發 `.github/workflows/download.yml` → runner 安裝 ffmpeg + yt-dlp 下載 → 上傳 artifact → 頁面取回 zip、在瀏覽器內用 JSZip 解壓後直接存成影片檔。
+
+- 每次下載約 **1–2 分鐘**（排隊 + 安裝 + 下載）。
+- Artifact 保留 1 天，之後 GitHub 自動刪除。
+- 公開 repo 的 Actions 分鐘數免費；private repo 會扣額度。
+- 限制：單一 job 最長 30 分鐘、artifact 上限視方案；4K 長片可能超時。
+- **IG / FB 仍需登入**：在 repo Secrets 加 `COOKIES`，workflow 內寫入 `cookies.txt` 再使用（預設未啟用）。
+
+> 安全提醒：token 存在瀏覽器 localStorage，只在這部裝置有效。建議用 fine-grained token，只授權這一個 repo 的 Actions 權限，並定期更換。不要在公用電腦使用。
+
+---
+
 ## API
 
 | Method | Path | 說明 |
