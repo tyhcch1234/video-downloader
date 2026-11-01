@@ -1,92 +1,94 @@
-# VidGrab · 影片下載器
+# 影片下載器 · Video Downloader
 
-貼上連結即可下載 **YouTube / Instagram / Facebook** 影片的網頁工具。
+貼上連結即可下載 YouTube、Instagram、Facebook、TikTok、X 等網站影片或音檔的網頁工具。
 
-前端是純靜態頁面（可放 GitHub Pages），後端用 `yt-dlp` 處理實際下載。
+前端是一個純靜態單頁（`index.html`），後端是一個以 `yt-dlp` 執行下載的小型 Flask 服務（`app.py`）。
 
 ---
 
-## 為什麼需要後端？
+## ⚠️ 先讀這段：為什麼不能只有 GitHub Pages
 
-瀏覽器基於 CORS 與同源政策，**無法**直接向 YouTube / Instagram / Facebook 取得影片串流位址；
-YouTube 還有簽章驗證、IG/FB 需要登入狀態。這些都必須由伺服器完成。
+GitHub Pages 只寄存靜態檔案，**不能執行伺服器程式**。而抓取 YouTube / Instagram / Facebook 的影片需要伺服器端解碼（YouTube 的簽名、IG/FB 的登入 session），瀏覽器端做不到（CORS + 反爬 + 需要 cookies）。
 
 所以架構是：
 
 ```
-瀏覽器 (GitHub Pages / 任意靜態空間)
-        │  fetch /api/*
+瀏覽器 (GitHub Pages 上的 index.html)
+        │  POST /api/info, /api/download
         ▼
-Node.js 後端 (Docker + yt-dlp + ffmpeg)
-        │  yt-dlp
+Flask + yt-dlp 後端（本機 / Render / 任何 VPS）
+        │
         ▼
-YouTube / Instagram / Facebook
+   影片檔（串流回瀏覽器下載）
 ```
+
+部署一次後端後，把它的網址填入網頁右上角齒輪（存在 localStorage），這頁就能在任何裝置使用。
 
 ---
 
-## 專案結構
+## 快速開始（本機，最快）
 
-```
-video-downloader/
-├── public/              前端（可直接丟 GitHub Pages）
-│   ├── index.html
-│   ├── style.css
-│   └── app.js
-├── server.js            後端 API
-├── package.json
-├── Dockerfile           含 yt-dlp + ffmpeg
-├── render.yaml          Render 一鍵部署設定
-└── README.md
-```
-
----
-
-## 本機執行
-
-需要先安裝 `yt-dlp` 與 `ffmpeg`。
+需要 Python 3.9+。
 
 ```bash
-# macOS
-brew install yt-dlp ffmpeg
-
-# Ubuntu / Debian
-sudo apt install ffmpeg python3-pip
-sudo pip3 install -U yt-dlp
+pip install -r requirements.txt
+python app.py
 ```
 
-然後：
+開啟 <http://localhost:8000> —— 這個網址由後端直接提供頁面，前後端同源，不用任何設定就能用。
+
+`requirements.txt` 已包含 `static-ffmpeg`，會自動帶一個 ffmpeg binary，用於合併高畫質影片＋音軌及抽取 MP3。若系統已安裝 ffmpeg 則優先使用系統版本。
+
+---
+
+## 部署後端（讓 GitHub Pages 上的頁面可用）
+
+### 選項 A：Render（免費方案即可）
+
+1. 在 Render 建立 **New → Web Service**，選 **Deploy from a Git repository**，指向本 repo。
+2. Runtime 選 **Docker**（會讀 `Dockerfile`，內含 ffmpeg）。或選 Python，Build Command `pip install -r requirements.txt`、Start Command `python app.py`。
+3. 部署完成後得到類似 `https://video-downloader-xxxx.onrender.com` 的網址。
+4. 回到網頁右上角齒輪，貼上該網址 → 儲存。
+
+也可以用一鍵部署：`https://render.com/deploy?repo=https://github.com/tyhcch1234/video-downloader`
+
+> Render 免費方案的容器會休眠，第一次請求要等 30–60 秒喚醒。
+
+### 選項 B：自己的 VPS / Docker
 
 ```bash
-npm install
-npm start
-# 開啟 http://localhost:8080
+docker build -t video-downloader .
+docker run -d -p 8000:8000 --name vd video-downloader
 ```
 
----
+放在反向代理（Caddy / Nginx）後面並啟用 HTTPS，因為 GitHub Pages 是 https，瀏覽器不允許它呼叫 http 後端（mixed content）。
 
-## 部署後端（免費方案：Render）
+### 選項 C：Cloudflare Workers / Vercel
 
-1. 用 GitHub 帳號登入 [Render](https://render.com)。
-2. **New → Blueprint**，選擇這個 repo，Render 會自動讀取 `render.yaml`。
-3. 等建置完成，取得網址，例如 `https://vidgrab-xxxx.onrender.com`。
-4. 開啟該網址，前端與 API 同源，直接可用。
-
-> Render 免費方案閒置一段時間會休眠，第一次開啟需等約 30 秒喚醒。
-
-其他平台（Railway / Fly.io / 自己的 VPS）也可用，重點是**執行環境要有 `yt-dlp` 與 `ffmpeg`**。
+不建議：兩者的執行時間與檔案大小限制不適合執行 yt-dlp。
 
 ---
 
-## 部署前端（GitHub Pages）
+## 啟用 GitHub Pages（前端）
 
-若後端部署在別的地方，前端可用 GitHub Pages：
+Repo → **Settings → Pages** → Source: **Deploy from a branch** → Branch `main`, folder `/ (root)` → Save。
 
-1. Repo → **Settings → Pages**
-2. **Source** 選 `Deploy from a branch`，Branch 選 `main`，Folder 選 **`/public`**
-3. 開啟 `https://<你的帳號>.github.io/video-downloader/`
-4. 點右上角 ⚙️，把 **API 網址** 填成後端網址（例如 `https://vidgrab-xxxx.onrender.com`）
-5. 儲存後即可使用（設定存在瀏覽器 localStorage）
+網址會是 `https://tyhcch1234.github.io/video-downloader/`。
+
+---
+
+## Instagram / Facebook / 私人影片
+
+IG 與 FB 幾乎所有貼文都需要登入 session，YouTube 有時會要求「確認你不是機器人」。做法：
+
+1. 用瀏覽器擴充套件（例如 *Get cookies.txt LOCALLY*）匯出 `cookies.txt`（Netscape 格式）。
+2. 把檔案放到伺服器，啟動時指定：
+
+```bash
+COOKIES_FILE=/path/to/cookies.txt python app.py
+```
+
+Render 上可把 `cookies.txt` 放進 repo 的私有分支或使用 Secret File，並設定環境變數 `COOKIES_FILE`。cookie 等同帳號憑證，**不要提交到公開 repo**（`.gitignore` 已排除）。
 
 ---
 
@@ -94,59 +96,25 @@ npm start
 
 | Method | Path | 說明 |
 |---|---|---|
-| `GET` | `/api/health` | 健康檢查 |
-| `POST` | `/api/info` | `{ url }` → 標題、縮圖、長度、可用畫質 |
-| `POST` | `/api/download` | `{ url, type, height }` → 建立任務，回傳 `jobId` |
-| `GET` | `/api/job/:id` | 查詢進度（百分比、速度、剩餘時間） |
-| `GET` | `/api/file/:id` | 下載完成的檔案 |
+| GET | `/api/health` | `{ok, yt_dlp, ffmpeg, cookies}` |
+| POST | `/api/info` | body `{url}` → 標題、縮圖、長度、可選畫質 |
+| POST | `/api/download` | body `{url, selector, audio_only}` → `{job_id}` |
+| GET | `/api/progress/<job_id>` | `{status, percent, speed, eta, filename, error}` |
+| GET | `/api/file/<job_id>` | 下載完成的檔案（attachment） |
 
-`type` 為 `video` 或 `audio`；`height` 為 `1080`、`720` 等，`null` 表示最佳畫質。
-
----
-
-## Instagram / Facebook 需要登入時
-
-IG 與 FB 多數內容要求登入。匯出 cookies 後掛載給後端：
-
-1. 用瀏覽器擴充套件（例如 *Get cookies.txt LOCALLY*）登入後匯出 `cookies.txt`
-2. 把檔案放到伺服器，設定環境變數：
-
-```bash
-YTDLP_COOKIES=/app/cookies.txt
-```
-
-Docker 部署時可用 volume 掛載，或把 cookies 內容存成 Secret 再寫入檔案。
-
-> ⚠️ cookies 等於你的登入憑證，**切勿 commit 到 repo**（`.gitignore` 已排除）。
+環境變數：`PORT`（預設 8000）、`COOKIES_FILE`、`ALLOW_ORIGIN`（預設 `*`，可限定為你的 Pages 網域）。
 
 ---
 
-## 環境變數
+## 已知限制
 
-| 變數 | 預設 | 說明 |
-|---|---|---|
-| `PORT` | `8080` | 監聽埠 |
-| `YTDLP_PATH` | `yt-dlp` | yt-dlp 執行檔路徑 |
-| `YTDLP_COOKIES` | — | cookies.txt 路徑 |
-| `CORS_ORIGIN` | `*` | 允許的前端來源，多個用逗號分隔 |
-| `MAX_CONCURRENT` | `4` | 同時下載任務上限 |
-| `INSECURE` | — | 設 `1` 可略過憑證檢查（不建議） |
-
----
-
-## 疑難排解
-
-| 症狀 | 原因與解法 |
-|---|---|
-| `Sign in to confirm you're not a bot` | YouTube 反機器人驗證，需設定 cookies，或更新 yt-dlp |
-| `Unable to extract` / 突然全部失敗 | 平台改版，執行 `yt-dlp -U` 或重新 build image |
-| IG 貼文下載失敗 | 需要登入 cookies，且只支援公開內容 |
-| 只有畫面沒有聲音 | 缺少 ffmpeg，裝上即可自動合併 |
-| Render 首次很慢 | 免費方案冷啟動，屬正常 |
+- 下載任務存在記憶體與暫存目錄，**重啟後消失**；暫存檔 2 小時後自動清除。不適合當長期雲端硬碟。
+- 單一 worker 即可，但同時大量下載會受頻寬限制；Render 免費方案 CPU 較弱，4K 合併會慢。
+- 只支援單一影片 URL；播放清單只會取第一條。
+- 網站改版可能令 yt-dlp 失效，定期 `pip install -U yt-dlp`。
 
 ---
 
 ## 免責聲明
 
-本工具僅供下載**你擁有著作權**或**已獲授權**的內容（例如自己的作品、公眾領域素材、平台明確允許下載的影片）。
-請遵守各平台的服務條款與當地著作權法規。使用者需自行承擔使用責任。
+本工具僅供下載你有權使用的內容（自己的作品、CC 授權、已取得授權的素材）。下載受版權保護的內容可能違反該網站服務條款及當地法律，請自行判斷並承擔責任。

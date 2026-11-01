@@ -1,0 +1,6 @@
+flask>=3.0
+yt-dlp>=2025.1.15
+
+# Optional but recommended: bundles an ffmpeg binary for merging video+audio
+# and MP3 extraction when the system has no ffmpeg installed.
+static-ffmpeg>=3.0

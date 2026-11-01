@@ -1,12 +1,10 @@
 services:
   - type: web
-    name: vidgrab
+    name: video-downloader
     runtime: docker
-    dockerfilePath: ./Dockerfile
     plan: free
-    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
     envVars:
-      - key: CORS_ORIGIN
+      - key: ALLOW_ORIGIN
         value: "*"
-      - key: MAX_CONCURRENT
-        value: "3"

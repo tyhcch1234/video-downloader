@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>設定說明 · 影片下載器</title>
+<style>
+  :root{--bg:#0b0d12;--card:#161a24;--line:rgba(255,255,255,.09);--tx:#eef1f7;--tx2:#9aa4b8;--tx3:#6b7488;--acc:#ff4d67;--acc2:#ff8a3d}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(800px 420px at 10% -6%,rgba(255,77,103,.14),transparent 60%),var(--bg);
+    color:var(--tx);font-family:-apple-system,BlinkMacSystemFont,"PingFang HK","Noto Sans HK","Microsoft JhengHei",Segoe UI,sans-serif;
+    line-height:1.68;padding:26px 18px 70px}
+  .wrap{max-width:700px;margin:0 auto}
+  h1{font-size:21px;margin:0 0 4px}
+  .lead{color:var(--tx2);font-size:13.5px;margin:0 0 22px}
+  h2{font-size:15px;margin:26px 0 8px;padding-top:16px;border-top:1px solid var(--line)}
+  h2:first-of-type{border-top:0;padding-top:0}
+  p,li{font-size:14px;color:#d5dae6}
+  ul{padding-left:20px}
+  code{background:rgba(255,255,255,.07);border-radius:6px;padding:2px 6px;font-size:12.5px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  pre{background:#0f1219;border:1px solid var(--line);border-radius:12px;padding:13px 15px;overflow-x:auto;font-size:12.5px}
+  pre code{background:none;padding:0}
+  .note{border:1px solid rgba(255,194,71,.32);background:rgba(255,194,71,.08);color:#ffd98a;
+    border-radius:12px;padding:12px 14px;font-size:13px;margin:14px 0}
+  .box{border:1px solid var(--line);background:rgba(255,255,255,.03);border-radius:14px;padding:14px 16px;margin:12px 0}
+  a{color:#ff8fa0}
+  .back{display:inline-block;margin-bottom:18px;font-size:13px;color:var(--tx2);text-decoration:none;
+    border:1px solid var(--line);border-radius:10px;padding:7px 12px}
+  .back:hover{color:var(--tx);background:rgba(255,255,255,.06)}
+  .tag{display:inline-block;font-size:11px;color:var(--tx3);border:1px solid var(--line);
+    border-radius:999px;padding:2px 9px;margin-left:6px;vertical-align:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="./">← 返回下載器</a>
+  <h1>設定說明</h1>
+  <p class="lead">這個頁面是靜態網頁，需要一個 yt-dlp 後端才能真正下載影片。設定一次即可。</p>
+
+  <div class="note">
+    <b>為什麼？</b> GitHub Pages 只能寄存檔案，不能執行程式。YouTube 的串流簽名、Instagram／Facebook 的登入 session 都必須在伺服器端處理，瀏覽器無法直接抓取。
+  </div>
+
+  <h2>① 啟動後端（本機最快）<span class="tag">30 秒</span></h2>
+  <p>需要 Python 3.9+：</p>
+  <pre><code>pip install -r requirements.txt
+python app.py</code></pre>
+  <p>然後開 <code>http://localhost:8000</code>，這個網址由後端直接提供頁面，前後端同源，無需任何設定即可使用。</p>
+
+  <h2>② 部署後端（讓這個 GitHub Pages 頁面可用）</h2>
+  <div class="box">
+    <p style="margin:0 0 8px"><b>Render（免費）</b></p>
+    <p style="margin:0 0 8px">New → Web Service → 連結此 repo → Runtime 選 <code>Docker</code>（含 ffmpeg）→ 部署。</p>
+    <p style="margin:0">完成後得到 <code>https://xxx.onrender.com</code>，貼到右上角齒輪儲存即可。免費方案閒置會休眠，首次喚醒約 30–60 秒。</p>
+  </div>
+  <div class="box">
+    <p style="margin:0 0 8px"><b>自己的 VPS / Docker</b></p>
+    <pre style="margin:0"><code>docker build -t video-downloader .
+docker run -d -p 8000:8000 video-downloader</code></pre>
+    <p style="margin:8px 0 0;font-size:13px;color:var(--tx2)">記得掛 HTTPS 反向代理：本頁是 https，不能呼叫 http 後端。</p>
+  </div>
+
+  <h2>③ 填入伺服器網址</h2>
+  <p>按右上角齒輪 → 貼上後端網址 → 「測試連線」→「儲存」。網址存在瀏覽器 localStorage，換裝置要再填一次。</p>
+
+  <h2>Instagram / Facebook / 私人內容</h2>
+  <p>這些內容幾乎都需要登入。匯出 <code>cookies.txt</code>（Netscape 格式）放在伺服器，啟動時加：</p>
+  <pre><code>COOKIES_FILE=/path/to/cookies.txt python app.py</code></pre>
+  <p>cookie 等同帳號憑證，切勿提交到公開 repo。</p>
+
+  <h2>限制</h2>
+  <ul>
+    <li>任務與暫存檔存在伺服器記憶體／暫存目錄，重啟即消失，2 小時後自動清除。</li>
+    <li>只處理單一影片連結，播放清單只取第一條。</li>
+    <li>網站改版可能令下載失效，屆時更新 yt-dlp 即可。</li>
+  </ul>
+
+  <p style="margin-top:26px;font-size:12.5px;color:var(--tx3)">
+    只下載你有權使用的內容。下載受版權保護的內容可能違反該網站服務條款及當地法律。
+  </p>
+</div>
+</body>
+</html>

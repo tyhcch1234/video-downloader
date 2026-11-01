@@ -1,11 +1,6 @@
-node_modules/
-.env
-.env.*
-*.log
-npm-debug.log*
+.downloads/
+__pycache__/
+*.pyc
 cookies.txt
-*.cookies.txt
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
+.env
+.venv/
