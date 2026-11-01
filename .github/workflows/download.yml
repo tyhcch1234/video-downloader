@@ -16,7 +16,7 @@ on:
         default: "false"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   fetch:
@@ -36,6 +36,7 @@ jobs:
           AUDIO: ${{ inputs.audio }}
         run: |
           set -e
+          mkdir -p out
           python3 - <<'PY'
           import os, yt_dlp
           url = os.environ["URL"]
@@ -64,7 +65,41 @@ jobs:
           PY
           ls -lh out/
 
-      - name: Upload
+      # 1) Release asset -> a direct .mp4 link (no zip)
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN: ${{ github.run_id }}
+        run: |
+          set -e
+          FILE=$(ls -S out/* | head -1)
+          NAME=$(basename "$FILE")
+          TAG="dl-${RUN}-$(date +%Y%m%d-%H%M%S)"
+          gh release create "$TAG" "$FILE" \
+            --title "下載 ${RUN}" \
+            --notes "由 GitHub Actions 自動產生，可隨時刪除。" \
+            --latest=false
+
+          URL=$(REPO="$REPO" TAG="$TAG" NAME="$NAME" python3 - <<'PY'
+          import os, urllib.parse
+          repo, tag, name = os.environ["REPO"], os.environ["TAG"], os.environ["NAME"]
+          print(f"https://github.com/{repo}/releases/download/{tag}/{urllib.parse.quote(name)}")
+          PY
+          )
+          {
+            echo "## ✅ 下載完成"
+            echo ""
+            echo "**[${NAME}](${URL})**"
+            echo ""
+            echo "點上面連結即可直接存成 ${NAME}（不是 zip）。"
+            echo ""
+            echo "檔案大小：$(du -h "$FILE" | cut -f1)　·　Release tag：\`${TAG}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "DIRECT_URL=${URL}" >> "$GITHUB_ENV"
+
+      # 2) Artifact kept for the web page's "GitHub Actions mode"
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: video
