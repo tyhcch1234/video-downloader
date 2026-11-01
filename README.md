@@ -102,6 +102,23 @@ Render 上可把 `cookies.txt` 放進 repo 的私有分支或使用 Secret File�
 
 流程：頁面用 API 觸發 `.github/workflows/download.yml` → runner 安裝 ffmpeg + yt-dlp 下載 → 上傳 artifact → 頁面取回 zip、在瀏覽器內用 JSZip 解壓後直接存成影片檔。
 
+### 完全不用 token：在 GitHub 網頁手動觸發（直出 mp4）
+
+1. 開 <https://github.com/tyhcch1234/video-downloader/actions/workflows/download.yml>
+2. 右邊 **Run workflow** → 貼上影片網址 → Run
+3. 等 1–2 分鐘，綠燈後開該次 run，頁面頂部 summary 會有 **直接下載連結**，點一下即存成 `.mp4`（不是 zip）
+
+workflow 會把成品發佈成一個 Release 資產（tag `dl-<run_id>-<時間>`），所以有直連：
+
+```
+https://github.com/tyhcch1234/video-downloader/releases/download/<tag>/<檔名>.mp4
+```
+
+注意：
+- repo 是公開的，所以 Release 裡的影片**任何人只要有連結都能下載**。私人內容請用伺服器模式（`app.py`），或下載完即刻到 Releases 頁面刪除該 release。
+- Release 會累積，定期到 <https://github.com/tyhcch1234/video-downloader/releases> 清理；資產單檔上限 2 GB。
+- 同時仍會上傳 artifact（1 日後自動刪除），供網頁的 Actions 模式使用。
+
 - 每次下載約 **1–2 分鐘**（排隊 + 安裝 + 下載）。
 - Artifact 保留 1 天，之後 GitHub 自動刪除。
 - 公開 repo 的 Actions 分鐘數免費；private repo 會扣額度。
